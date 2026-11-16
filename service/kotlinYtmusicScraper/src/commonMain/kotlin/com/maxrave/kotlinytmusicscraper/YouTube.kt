@@ -239,6 +239,7 @@ class YouTube {
      */
     fun removeProxy() {
         ytMusic.proxy = null
+        ytMusic.configureExtractorProxy(isHttp = true, host = null, port = 0)
     }
 
     /**
@@ -261,6 +262,7 @@ class YouTube {
             }
         }.onSuccess {
             ytMusic.proxy = it
+            ytMusic.configureExtractorProxy(isHttp, host, port)
         }.onFailure {
             it.printStackTrace()
         }
