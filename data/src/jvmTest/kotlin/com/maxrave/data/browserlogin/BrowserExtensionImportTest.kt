@@ -3,8 +3,11 @@ package com.maxrave.data.browserlogin
 import com.maxrave.domain.repository.BrowserLoginException
 import com.maxrave.domain.repository.BrowserLoginTarget
 import kotlinx.coroutines.runBlocking
-import java.net.HttpURLConnection
-import java.net.URL
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.time.Duration
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -51,20 +54,19 @@ class BrowserExtensionImportTest {
     }
 
     private fun postImport(port: Int, body: String, code: String, origin: String?): Int {
-        val conn = URL("http://127.0.0.1:$port/import").openConnection() as HttpURLConnection
-        return try {
-            conn.requestMethod = "POST"
-            conn.connectTimeout = 3_000
-            conn.readTimeout = 3_000
-            conn.doOutput = true
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("X-SimpMusic-Code", code)
-            if (origin != null) conn.setRequestProperty("Origin", origin)
-            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-            conn.responseCode
-        } finally {
-            conn.disconnect()
-        }
+        // HttpURLConnection silently strips a caller-provided Origin header,
+        // which would make malicious-Origin checks a false positive.
+        // Java HttpClient forwards the exact Origin header we set here.
+        val request = HttpRequest.newBuilder(URI("http://127.0.0.1:$port/import"))
+            .timeout(Duration.ofSeconds(5))
+            .header("Content-Type", "application/json")
+            .header("X-SimpMusic-Code", code)
+            .apply { if (origin != null) header("Origin", origin) }
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build()
+        return HttpClient.newHttpClient()
+            .send(request, HttpResponse.BodyHandlers.discarding())
+            .statusCode()
     }
     @Test
     fun youtubeAcceptsOnlySelectedService() {
