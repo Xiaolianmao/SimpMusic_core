@@ -1719,12 +1719,16 @@ class MpvPlayerAdapter(
     private fun createMediaPlayerInternal(source: PlayableSource): MpvPlayer? {
         // VLC used --network-caching=10000 globally and :network-caching=15000 for video.
         val cacheSeconds = if (source.isVideo) 15 else 10
+        // mpv is a separate native HTTP client and does not share Ktor's proxy.
+        // Only pass HTTP configuration here; libmpv's http-proxy option does
+        // not support native SOCKS. Clash mixed ports can use HTTP instead.
+        val proxy = mpvHttpProxy(dataStoreManager.getJVMProxy())
         return if (source.isVideo) {
             Logger.d(TAG, "Creating video player with software render surface")
-            MpvPlayer.create(audioOnly = false, networkCacheSeconds = cacheSeconds, liveStream = source.isLive)
+            MpvPlayer.create(audioOnly = false, networkCacheSeconds = cacheSeconds, liveStream = source.isLive, httpProxy = proxy)
         } else {
             Logger.d(TAG, "Creating audio-only player")
-            MpvPlayer.create(audioOnly = true, networkCacheSeconds = cacheSeconds, liveStream = source.isLive)
+            MpvPlayer.create(audioOnly = true, networkCacheSeconds = cacheSeconds, liveStream = source.isLive, httpProxy = proxy)
         }
     }
 
