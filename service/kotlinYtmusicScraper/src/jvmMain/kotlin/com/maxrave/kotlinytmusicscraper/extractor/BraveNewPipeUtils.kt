@@ -13,9 +13,9 @@ import java.net.Proxy
 
 internal fun List<Pair<Int, String>>.hasRequiredItags(): Boolean {
     val itags = this.mapTo(HashSet()) { it.first }
-    val hasAudio = ITAG.AUDIO.any { it in itags }
-    val hasVideo = ITAG.VIDEO.any { it in itags }
-    return hasAudio && hasVideo
+    // Audio-only YouTube Music tracks are valid. Requiring a separate video stream
+    // rejects otherwise playable songs before the player gets their audio URL.
+    return ITAG.AUDIO.any { it in itags }
 }
 
 @Volatile
@@ -32,8 +32,11 @@ internal fun configureStreamHealthCheckProxy(proxy: Proxy?) {
  * they are the ones the player will actually use; lower-quality extras can stay unverified.
  */
 internal fun List<Pair<Int, String>>.headCheckRandomStream(): Boolean {
-    val required = ITAG.AUDIO + ITAG.VIDEO
-    val candidate = this.filter { it.first in required }.randomOrNull() ?: return false
+    // Check audio first. A randomly selected video CDN URL may be unavailable even
+    // when the audio URL (which is what music playback actually needs) is valid.
+    val candidate = this.firstOrNull { it.first in ITAG.AUDIO }
+        ?: this.firstOrNull { it.first in ITAG.VIDEO }
+        ?: return false
     return runCatching {
         val request =
             okhttp3.Request
