@@ -250,7 +250,15 @@ class YouTube {
         port: Int,
     ) {
         runCatching {
-            if (isHttp) ProxyBuilder.http("$host:$port") else ProxyBuilder.socks(host, port)
+            // ProxyBuilder.http expects an absolute URL (including "http://").
+            // The settings screen stores only the hostname, e.g. 127.0.0.1.
+            val proxyHost = host.trim().removePrefix("http://").removePrefix("https://").trimEnd('/')
+            require(proxyHost.isNotEmpty() && port in 1..65535) { "Invalid proxy address" }
+            if (isHttp) {
+                ProxyBuilder.http("http://$proxyHost:$port")
+            } else {
+                ProxyBuilder.socks(proxyHost, port)
+            }
         }.onSuccess {
             ytMusic.proxy = it
         }.onFailure {
