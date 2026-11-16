@@ -44,6 +44,7 @@ internal object BrowserExtensionImport {
     suspend fun receive(
         target: BrowserLoginTarget,
         onReady: suspend (port: Int, code: String) -> Unit,
+        listenPort: Int = PORT,
     ): BrowserCookies = mutex.withLock {
         withContext(Dispatchers.IO) {
             val codeBytes = ByteArray(18).also(random::nextBytes)
@@ -51,7 +52,7 @@ internal object BrowserExtensionImport {
             codeBytes.fill(0)
             val deferred = CompletableDeferred<BrowserCookies>()
             val server = try {
-                HttpServer.create(InetSocketAddress("127.0.0.1", PORT), 2)
+                HttpServer.create(InetSocketAddress("127.0.0.1", listenPort), 2)
             } catch (_: Exception) {
                 throw BrowserLoginException(BrowserLoginFailure.EXTENSION_UNAVAILABLE)
             }
@@ -64,7 +65,7 @@ internal object BrowserExtensionImport {
                     respondToImport(exchange, target, code, deferred)
                 }
                 server.start()
-                onReady(PORT, code)
+                onReady(server.address.port, code)
                 try {
                     withTimeout(TIMEOUT_MS) { deferred.await() }
                 } catch (_: TimeoutCancellationException) {
@@ -84,15 +85,28 @@ internal object BrowserExtensionImport {
         deferred: CompletableDeferred<BrowserCookies>,
     ) {
         try {
-            val origin = exchange.requestHeaders.getFirst("Origin").orEmpty()
-            if (!originPattern.matches(origin) || !exchange.remoteAddress.address.isLoopbackAddress) {
+            // Chrome extensions with host_permissions may omit Origin on fetch().
+            // Other Chromium-based browsers may send chrome-extension://<id>.
+            // Reject non-extension Origins (including "null") to prevent websites
+            // from importing credentials. A missing Origin is accepted only on
+            // loopback, with the 144-bit one-time code still mandatory for POST.
+            val origin = exchange.requestHeaders.getFirst("Origin")
+            if (!exchange.remoteAddress.address.isLoopbackAddress ||
+                (origin != null && !originPattern.matches(origin))
+            ) {
                 respond(exchange, 403, "Forbidden")
                 return
             }
-            exchange.responseHeaders.set("Access-Control-Allow-Origin", origin)
-            exchange.responseHeaders.set("Vary", "Origin")
+            if (origin != null) {
+                exchange.responseHeaders.set("Access-Control-Allow-Origin", origin)
+                exchange.responseHeaders.set("Vary", "Origin")
+            }
             exchange.responseHeaders.set("Cache-Control", "no-store")
             if (exchange.requestMethod == "OPTIONS") {
+                if (origin == null) {
+                    respond(exchange, 403, "Forbidden")
+                    return
+                }
                 exchange.responseHeaders.set("Access-Control-Allow-Methods", "POST, OPTIONS")
                 exchange.responseHeaders.set("Access-Control-Allow-Headers", "Content-Type, X-SimpMusic-Code")
                 respond(exchange, 204, "")
