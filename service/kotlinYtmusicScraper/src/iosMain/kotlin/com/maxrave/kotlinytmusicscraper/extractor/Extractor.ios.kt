@@ -9,6 +9,9 @@ actual class Extractor {
 
     actual fun logIn(cookie: String?) {}
 
+    // iOS extractor implementation does not currently fetch playable streams.
+    actual fun setProxy(isHttp: Boolean, host: String?, port: Int) {}
+
     actual fun newPipePlayer(videoId: String): List<Pair<Int, String>> = emptyList()
 
     actual fun liveHlsUrl(videoId: String): String? = null

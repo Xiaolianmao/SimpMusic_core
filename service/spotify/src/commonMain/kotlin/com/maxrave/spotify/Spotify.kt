@@ -29,14 +29,15 @@ class Spotify {
         host: String,
         port: Int,
     ) {
-        val verifiedHost =
-            if (!host.contains("http")) {
-                "http://$host"
-            } else {
-                host
-            }
         runCatching {
-            if (isHttp) ProxyBuilder.http("$verifiedHost:$port") else ProxyBuilder.socks(verifiedHost, port)
+            // HTTP takes an absolute URL; SOCKS takes a plain host.
+            val proxyHost = host.trim().removePrefix("http://").removePrefix("https://").trimEnd('/')
+            require(proxyHost.isNotEmpty() && port in 1..65535) { "Invalid proxy address" }
+            if (isHttp) {
+                ProxyBuilder.http("http://$proxyHost:$port")
+            } else {
+                ProxyBuilder.socks(proxyHost, port)
+            }
         }.onSuccess {
             spotifyClient.proxy = it
         }.onFailure {

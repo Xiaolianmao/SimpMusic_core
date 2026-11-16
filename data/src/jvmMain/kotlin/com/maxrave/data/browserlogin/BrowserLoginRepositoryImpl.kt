@@ -52,6 +52,11 @@ class BrowserLoginRepositoryImpl internal constructor(
         }
     }
 
+    override suspend fun receiveFromExtension(
+        target: BrowserLoginTarget,
+        onReady: suspend (port: Int, code: String) -> Unit,
+    ): BrowserCookies = BrowserExtensionImport.receive(target, onReady)
+
     override suspend fun cookies(profile: BrowserProfile, target: BrowserLoginTarget): BrowserCookies = withContext(Dispatchers.IO) {
         mutex.withLock {
             val source = sources[profile.id] ?: throw BrowserLoginException(BrowserLoginFailure.NO_COOKIES)

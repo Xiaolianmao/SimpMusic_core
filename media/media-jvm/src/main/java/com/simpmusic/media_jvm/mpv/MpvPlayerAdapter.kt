@@ -80,6 +80,7 @@ class MpvPlayerAdapter(
     private val dataStoreManager: DataStoreManager,
     private val streamRepository: StreamRepository,
 ) : MediaPlayerInterface {
+    private val httpsRelay = MpvHttpsRelay()
     // Internal state enum for proper state machine
     private enum class InternalState {
         IDLE,
@@ -1455,6 +1456,7 @@ class MpvPlayerAdapter(
         coroutineScope.cancel()
         cleanupCurrentPlayerInternal()
         clearAllPrecacheInternal()
+        httpsRelay.close()
         listeners.clear()
 
         // No factory to release: libmpv has no factory concept, each handle is destroyed by its
@@ -1705,8 +1707,17 @@ class MpvPlayerAdapter(
      * always resolves to a single audio URL and never opens a video stream.
      */
     private fun buildPlaybackUrl(source: PlayableSource): String {
-        val audioSlave = source.audioSlaveUrl
-        return if (audioSlave != null) buildEdlUrl(source.url, audioSlave) else source.url
+        val proxy = dataStoreManager.getJVMProxy()
+        // libmpv 0.37's http-proxy setting does NOT carry HTTPS traffic.
+        // Use a local HTTP stream and fetch the remote encrypted media with
+        // the JDK HttpClient through the user's explicit HTTP proxy instead.
+        // Live HLS playlists can contain relative segment links, so preserve
+        // their original URL until a dedicated playlist rewriting path exists.
+        val primary = if (source.isLive) source.url else httpsRelay.route(source.url, proxy)
+        val audioSlave = source.audioSlaveUrl?.let {
+            if (source.isLive) it else httpsRelay.route(it, proxy)
+        }
+        return if (audioSlave != null) buildEdlUrl(primary, audioSlave) else primary
     }
 
     /**
@@ -1719,12 +1730,22 @@ class MpvPlayerAdapter(
     private fun createMediaPlayerInternal(source: PlayableSource): MpvPlayer? {
         // VLC used --network-caching=10000 globally and :network-caching=15000 for video.
         val cacheSeconds = if (source.isVideo) 15 else 10
+        // mpv is a separate native HTTP client and does not share Ktor's proxy.
+        // Do not send the local relay URL through Clash a second time.
+        // The JDK handles HTTPS CONNECT via the configured proxy; native mpv
+        // should connect directly to loopback for that proxied media.
+        val configuredProxy = dataStoreManager.getJVMProxy()
+        val relayed = !source.isLive &&
+            configuredProxy?.type == DataStoreManager.ProxyType.PROXY_TYPE_HTTP &&
+            (source.url.startsWith("https://") ||
+                source.audioSlaveUrl?.startsWith("https://") == true)
+        val proxy = if (relayed) null else mpvHttpProxy(configuredProxy)
         return if (source.isVideo) {
             Logger.d(TAG, "Creating video player with software render surface")
-            MpvPlayer.create(audioOnly = false, networkCacheSeconds = cacheSeconds, liveStream = source.isLive)
+            MpvPlayer.create(audioOnly = false, networkCacheSeconds = cacheSeconds, liveStream = source.isLive, httpProxy = proxy)
         } else {
             Logger.d(TAG, "Creating audio-only player")
-            MpvPlayer.create(audioOnly = true, networkCacheSeconds = cacheSeconds, liveStream = source.isLive)
+            MpvPlayer.create(audioOnly = true, networkCacheSeconds = cacheSeconds, liveStream = source.isLive, httpProxy = proxy)
         }
     }
 

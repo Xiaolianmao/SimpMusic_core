@@ -162,6 +162,11 @@ class Ytmusic {
 
     private val extractor = Extractor()
 
+    /** PipePipe/BravePipe do not share the Ktor proxy automatically. */
+    fun configureExtractorProxy(isHttp: Boolean, host: String?, port: Int) {
+        extractor.setProxy(isHttp, host, port)
+    }
+
     init {
         extractor.init()
     }

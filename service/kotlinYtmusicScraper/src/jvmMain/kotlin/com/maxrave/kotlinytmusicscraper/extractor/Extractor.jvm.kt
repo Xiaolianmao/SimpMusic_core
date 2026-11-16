@@ -26,6 +26,19 @@ actual class Extractor {
         YoutubeApiDecoder.setLocalDecoder(faradayDecoder)
     }
 
+    actual fun setProxy(isHttp: Boolean, host: String?, port: Int) {
+        val proxy = extractorNetworkProxy(isHttp, host, port)
+        newPipeDownloader = NewPipeDownloaderImpl(proxy = proxy)
+        braveNewPipeDownloader = BraveNewPipeDownloaderImpl(proxy = proxy)
+        // PipePipe and BravePipe use separate global downloader instances.
+        // They must be reinitialized when the app proxy changes, otherwise
+        // home metadata works via Ktor while URL extraction still goes direct.
+        NewPipe.init(newPipeDownloader)
+        BraveNewPipe.init(braveNewPipeDownloader)
+        configureStreamHealthCheckProxy(proxy)
+        Logger.i(TAG, "Stream extractor proxy " + if (proxy == null) "disabled" else "enabled")
+    }
+
     actual fun logIn(cookie: String?) {
         ServiceList.YouTube.tokens = cookie ?: ""
     }
