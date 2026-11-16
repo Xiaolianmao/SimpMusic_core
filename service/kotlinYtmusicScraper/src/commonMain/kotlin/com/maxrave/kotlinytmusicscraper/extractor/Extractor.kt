@@ -8,6 +8,9 @@ expect class Extractor() {
 
     fun logIn(cookie: String?)
 
+    /** Configure the stream extractors separately from the Ktor metadata client. */
+    fun setProxy(isHttp: Boolean, host: String?, port: Int)
+
     fun mergeAudioVideoDownload(filePath: String): DownloadProgress
 
     fun saveAudioWithThumbnail(
