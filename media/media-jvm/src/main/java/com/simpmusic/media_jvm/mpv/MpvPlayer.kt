@@ -192,6 +192,7 @@ class MpvPlayer private constructor(
             audioOnly: Boolean = true,
             networkCacheSeconds: Int = 10,
             liveStream: Boolean = false,
+            httpProxy: String? = null,
         ): MpvPlayer? {
             val lib = MpvLibrary.INSTANCE ?: return null
             val ctx = lib.mpv_create()
@@ -252,6 +253,11 @@ class MpvPlayer private constructor(
             // surfaces as MPV_EVENT_END_FILE instead of MPV_EVENT_SHUTDOWN.
             option("idle", "yes")
             option("audio-client-name", "SimpMusic")
+            // Metadata requests use Ktor's proxy. Native mpv playback was
+            // previously still connecting straight to its CDN.
+            // Set the mpv network option before initialization for every
+            // current, precached and crossfade player handle.
+            if (httpProxy != null) option("http-proxy", httpProxy)
 
             // macOS only: keep mpv off ao_coreaudio, which leaks a process-wide CoreAudio
             // listener pointing at a freed `struct ao` and takes the whole JVM down the next
