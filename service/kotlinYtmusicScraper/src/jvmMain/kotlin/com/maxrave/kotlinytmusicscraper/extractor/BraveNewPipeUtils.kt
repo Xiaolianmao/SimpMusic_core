@@ -18,10 +18,12 @@ internal fun List<Pair<Int, String>>.hasRequiredItags(): Boolean {
     return hasAudio && hasVideo
 }
 
-private val streamHealthCheckClient: OkHttpClient by lazy {
-    OkHttpClient
-        .Builder()
-        .build()
+@Volatile
+private var streamHealthCheckClient: OkHttpClient = OkHttpClient.Builder().build()
+
+/** The signed CDN URL HEAD check must use the same proxy as the extractor. */
+internal fun configureStreamHealthCheckProxy(proxy: Proxy?) {
+    streamHealthCheckClient = OkHttpClient.Builder().proxy(proxy).build()
 }
 
 /**
