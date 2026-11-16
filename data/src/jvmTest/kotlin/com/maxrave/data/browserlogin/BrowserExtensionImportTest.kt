@@ -14,12 +14,29 @@ import kotlin.test.assertTrue
 /** Synthetic test cookies only. No real browser profiles or credentials are accessed. */
 class BrowserExtensionImportTest {
     @Test
-    fun acceptsChromiumExtensionRequestsWithoutOriginButStillRequiresCode() = runBlocking {
+    fun acceptsChromiumExtensionRequestsWithoutOrigin() = runBlocking {
         val imported = BrowserExtensionImport.receive(BrowserLoginTarget.YOUTUBE, onReady = { port, code ->
-            val payload = payload("YOUTUBE", ".youtube.com", "SAPISID", "synthetic-value")
-            assertEquals(403, postImport(port, payload, "incorrect-code", null))
-            assertEquals(403, postImport(port, payload, code, "https://untrusted.example"))
-            assertEquals(200, postImport(port, payload, code, null))
+            assertEquals(200, postImport(port, payload("YOUTUBE", ".youtube.com", "SAPISID", "synthetic-value"), code, null))
+        }, listenPort = 0)
+        assertEquals("SAPISID=synthetic-value", imported.cookie)
+    }
+
+    @Test
+    fun rejectsWrongCodeWithoutOrigin() = runBlocking {
+        val imported = BrowserExtensionImport.receive(BrowserLoginTarget.YOUTUBE, onReady = { port, code ->
+            val synthetic = payload("YOUTUBE", ".youtube.com", "SAPISID", "synthetic-value")
+            assertEquals(403, postImport(port, synthetic, "incorrect-code", null))
+            assertEquals(200, postImport(port, synthetic, code, null))
+        }, listenPort = 0)
+        assertEquals("SAPISID=synthetic-value", imported.cookie)
+    }
+
+    @Test
+    fun rejectsUntrustedWebsiteOrigin() = runBlocking {
+        val imported = BrowserExtensionImport.receive(BrowserLoginTarget.YOUTUBE, onReady = { port, code ->
+            val synthetic = payload("YOUTUBE", ".youtube.com", "SAPISID", "synthetic-value")
+            assertEquals(403, postImport(port, synthetic, code, "https://untrusted.example"))
+            assertEquals(200, postImport(port, synthetic, code, null))
         }, listenPort = 0)
         assertEquals("SAPISID=synthetic-value", imported.cookie)
     }
