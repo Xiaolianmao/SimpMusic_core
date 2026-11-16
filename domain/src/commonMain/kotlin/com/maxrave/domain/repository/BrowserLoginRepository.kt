@@ -7,6 +7,15 @@ interface BrowserLoginRepository {
     /** Reads only the selected service; Spotify imports contain sp_dc alone. */
     suspend fun cookies(profile: BrowserProfile, target: BrowserLoginTarget): BrowserCookies
 
+    /** Explicit user-authorized import from a browser extension on the local computer.
+     * The bridge only accepts the selected service's cookies and never sends credentials
+     * outside the computer. Other platforms can keep using native browser discovery.
+     */
+    suspend fun receiveFromExtension(
+        target: BrowserLoginTarget,
+        onReady: suspend (port: Int, code: String) -> Unit,
+    ): BrowserCookies = throw BrowserLoginException(BrowserLoginFailure.EXTENSION_UNAVAILABLE)
+
     /** Reads only YouTube cookies from the explicitly selected profile. */
     suspend fun youTubeCookies(profile: BrowserProfile): BrowserCookies = cookies(profile, BrowserLoginTarget.YOUTUBE)
 }
@@ -45,6 +54,8 @@ enum class BrowserLoginFailure {
     DATABASE_BUSY,
     INVALID_DATA,
     NO_COOKIES,
+    EXTENSION_UNAVAILABLE,
+    EXTENSION_TIMEOUT,
 }
 
 /** Public errors contain a category only, never native errors, paths, cookie values or keys. */
