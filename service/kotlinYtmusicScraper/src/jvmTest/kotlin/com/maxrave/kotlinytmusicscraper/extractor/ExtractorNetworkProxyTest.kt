@@ -7,6 +7,7 @@ import java.net.Proxy
 import java.net.ServerSocket
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -21,6 +22,12 @@ class ExtractorNetworkProxyTest {
 
         val socks = assertNotNull(extractorNetworkProxy(false, "127.0.0.1", 7897))
         assertEquals(Proxy.Type.SOCKS, socks.type())
+    }
+
+    @Test
+    fun audioOnlyTracksAreAcceptedWithoutRequiringVideo() {
+        assertTrue(listOf(ITAG.AUDIO.first() to "https://example.com/audio").hasRequiredItags())
+        assertFalse(listOf(ITAG.VIDEO.first() to "https://example.com/video").hasRequiredItags())
     }
 
     @Test
@@ -46,7 +53,10 @@ class ExtractorNetworkProxyTest {
 
             try {
                 configureStreamHealthCheckProxy(proxy)
-                val formats = listOf(ITAG.AUDIO.first() to "http://example.invalid/stream")
+                val formats = listOf(
+                    ITAG.VIDEO.first() to "http://example.invalid/video",
+                    ITAG.AUDIO.first() to "http://example.invalid/stream",
+                )
                 assertTrue(formats.headCheckRandomStream(), "The request must use the test proxy")
                 worker.join(3000)
                 assertTrue(requestLine.startsWith("HEAD http://example.invalid/stream"))
