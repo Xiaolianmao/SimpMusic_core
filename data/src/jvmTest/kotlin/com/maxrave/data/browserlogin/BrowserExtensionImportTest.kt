@@ -15,21 +15,21 @@ import kotlin.test.assertTrue
 class BrowserExtensionImportTest {
     @Test
     fun acceptsChromiumExtensionRequestsWithoutOriginButStillRequiresCode() = runBlocking {
-        val imported = BrowserExtensionImport.receive(BrowserLoginTarget.YOUTUBE, listenPort = 0) { port, code ->
+        val imported = BrowserExtensionImport.receive(BrowserLoginTarget.YOUTUBE, onReady = { port, code ->
             val payload = payload("YOUTUBE", ".youtube.com", "SAPISID", "synthetic-value")
             assertEquals(403, postImport(port, payload, "incorrect-code", null))
             assertEquals(403, postImport(port, payload, code, "https://untrusted.example"))
             assertEquals(200, postImport(port, payload, code, null))
-        }
+        }, listenPort = 0)
         assertEquals("SAPISID=synthetic-value", imported.cookie)
     }
 
     @Test
     fun acceptsValidExtensionOrigin() = runBlocking {
-        val imported = BrowserExtensionImport.receive(BrowserLoginTarget.SPOTIFY, listenPort = 0) { port, code ->
+        val imported = BrowserExtensionImport.receive(BrowserLoginTarget.SPOTIFY, onReady = { port, code ->
             val validOrigin = "chrome-extension://" + "a".repeat(32)
             assertEquals(200, postImport(port, payload("SPOTIFY", ".spotify.com", "sp_dc", "synthetic-value"), code, validOrigin))
-        }
+        }, listenPort = 0)
         assertEquals("sp_dc=synthetic-value", imported.cookie)
     }
 
