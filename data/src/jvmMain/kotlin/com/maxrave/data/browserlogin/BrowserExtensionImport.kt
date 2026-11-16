@@ -140,8 +140,15 @@ internal object BrowserExtensionImport {
             } finally {
                 body.fill(0)
             }
-            if (deferred.complete(cookies)) respond(exchange, 200, "Imported")
-            else respond(exchange, 409, "Already imported")
+            // Finish writing the HTTP response before waking receive(), whose
+            // finally block stops the local server. Completing first could
+            // close the socket before Chromium receives HTTP 200.
+            if (deferred.isCompleted) {
+                respond(exchange, 409, "Already imported")
+            } else {
+                respond(exchange, 200, "Imported")
+                deferred.complete(cookies)
+            }
         } catch (_: Exception) {
             try {
                 respond(exchange, 400, "Import failed")
