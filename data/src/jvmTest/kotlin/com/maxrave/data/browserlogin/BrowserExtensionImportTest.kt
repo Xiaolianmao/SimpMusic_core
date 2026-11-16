@@ -2,6 +2,9 @@ package com.maxrave.data.browserlogin
 
 import com.maxrave.domain.repository.BrowserLoginException
 import com.maxrave.domain.repository.BrowserLoginTarget
+import kotlinx.coroutines.runBlocking
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -10,6 +13,42 @@ import kotlin.test.assertTrue
 
 /** Synthetic test cookies only. No real browser profiles or credentials are accessed. */
 class BrowserExtensionImportTest {
+    @Test
+    fun acceptsChromiumExtensionRequestsWithoutOriginButStillRequiresCode() = runBlocking {
+        val imported = BrowserExtensionImport.receive(BrowserLoginTarget.YOUTUBE, listenPort = 0) { port, code ->
+            val payload = payload("YOUTUBE", ".youtube.com", "SAPISID", "synthetic-value")
+            assertEquals(403, postImport(port, payload, "incorrect-code", null))
+            assertEquals(403, postImport(port, payload, code, "https://untrusted.example"))
+            assertEquals(200, postImport(port, payload, code, null))
+        }
+        assertEquals("SAPISID=synthetic-value", imported.cookie)
+    }
+
+    @Test
+    fun acceptsValidExtensionOrigin() = runBlocking {
+        val imported = BrowserExtensionImport.receive(BrowserLoginTarget.SPOTIFY, listenPort = 0) { port, code ->
+            val validOrigin = "chrome-extension://" + "a".repeat(32)
+            assertEquals(200, postImport(port, payload("SPOTIFY", ".spotify.com", "sp_dc", "synthetic-value"), code, validOrigin))
+        }
+        assertEquals("sp_dc=synthetic-value", imported.cookie)
+    }
+
+    private fun postImport(port: Int, body: String, code: String, origin: String?): Int {
+        val conn = URL("http://127.0.0.1:$port/import").openConnection() as HttpURLConnection
+        return try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 3_000
+            conn.readTimeout = 3_000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("X-SimpMusic-Code", code)
+            if (origin != null) conn.setRequestProperty("Origin", origin)
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            conn.responseCode
+        } finally {
+            conn.disconnect()
+        }
+    }
     @Test
     fun youtubeAcceptsOnlySelectedService() {
         val cookies = BrowserExtensionImport.parseCookies(
